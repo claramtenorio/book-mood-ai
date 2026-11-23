@@ -3,3 +3,4 @@ numpy>=1.26.0
 pydantic>=2.7.0
 pyarrow>=16.0.0
 requests>=2.31.0
+requests

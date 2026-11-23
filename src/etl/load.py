@@ -30,7 +30,7 @@ def add_discovery_metrics(
     min_votes_m = float(df["num_ratings"].quantile(0.25))
 
     v = df["num_ratings"].astype(float)
-    r = df["rating"].astype(float)
+    r = df["rating"].fillna(catalog_mean).astype(float)
 
     # Bayesian Average: WR = (v / (v + m)) * R + (m / (v + m)) * C
     df["bayesian_rating"] = (

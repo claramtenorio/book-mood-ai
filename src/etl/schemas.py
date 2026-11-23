@@ -1,16 +1,16 @@
 import ast
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class BookRecord(BaseModel):
-    """Validated data contract for a single book record in our pipeline."""
+    """Validated data contract for a single book record across all ingestion sources."""
 
     book_id: str = Field(..., min_length=1, description="Unique identifier from source")
     title: str = Field(..., min_length=1)
     author: str = Field(..., min_length=1)
-    rating: float = Field(..., gt=0.0, le=5.0)
-    num_ratings: int = Field(..., gt=0)
+    rating: Optional[float] = Field(default=None, gt=0.0, le=5.0)
+    num_ratings: int = Field(default=0, ge=0)
     ratings_by_stars: list[int] = Field(default_factory=list)
     description: str = Field(..., min_length=10)
     genres: list[str] = Field(default_factory=list)
@@ -18,6 +18,18 @@ class BookRecord(BaseModel):
     language: str = Field(..., min_length=2)
     cover_img: Optional[str] = None
     source: str = Field(default="kaggle_bbe")
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def parse_rating(cls, value: object) -> Optional[float]:
+        """Convert missing or zero ratings to None before source-specific validation."""
+        if value is None or str(value).strip().lower() in {"", "nan", "none"}:
+            return None
+        try:
+            val = float(value)
+            return val if val > 0.0 else None
+        except (ValueError, TypeError):
+            return None
 
     @field_validator("genres", mode="before")
     @classmethod
@@ -68,3 +80,11 @@ class BookRecord(BaseModel):
         if value is None or str(value).strip().lower() == "nan":
             return ""
         return " ".join(str(value).split())
+
+    @model_validator(mode="after")
+    def validate_source_rules(self) -> "BookRecord":
+        """Enforce strict rating rules on historical Kaggle data while allowing unrated API releases."""
+        if self.source == "kaggle_bbe":
+            if self.rating is None or self.num_ratings <= 0:
+                raise ValueError("Historical Kaggle records must have rating > 0 and num_ratings > 0.")
+        return self
